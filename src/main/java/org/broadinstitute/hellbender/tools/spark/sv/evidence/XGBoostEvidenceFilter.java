@@ -410,7 +410,7 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
     }
 
     /**
-     * Calculate fractional overlap of BreakpointEvidence with genome tract data.
+     * Calculate fractional overlap of BreakpointEvidence with genome track data.
      * Separately sum the number of base pairs in genomeIntervals that overlap evidence (allowing base pairs to
      * count multiple times if there is overlap in genomeIntervals) then divide by length of evidence. returned
      * value will be double >= 0, but may be larger than 1 if any genomeIntervals overlap each other.
@@ -425,7 +425,7 @@ public final class XGBoostEvidenceFilter implements Iterator<BreakpointEvidence>
         int overlap = 0;
         for(final Iterator<BEDFeature> overlapperItr = genomeIntervals.query(simpleInterval); overlapperItr.hasNext();) {
             final BEDFeature overlapper = overlapperItr.next();
-            // " + 1" because genome tract data is semi-closed, but BEDFeature is fully closed
+            // " + 1" because genome track data is semi-closed, but BEDFeature is fully closed
             final int overlapLength = Math.min(simpleInterval.getEnd(), overlapper.getEnd()) + 1
                     - Math.max(simpleInterval.getStart(), overlapper.getStart());
             overlap += overlapLength;
