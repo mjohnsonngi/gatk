@@ -5,6 +5,7 @@ import htsjdk.variant.variantcontext.Genotype;
 import htsjdk.variant.variantcontext.VariantContext;
 import org.apache.commons.lang3.tuple.Triple;
 import org.apache.commons.math3.util.FastMath;
+import org.broadinstitute.hellbender.engine.FeatureContext;
 import org.broadinstitute.hellbender.engine.ReferenceContext;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.walkers.annotator.AssemblyComplexity;
@@ -101,8 +102,9 @@ public class Mutect3DatasetEngine implements AutoCloseable {
     }
 
     // add one datum per alt allele
-    public void addData(final ReferenceContext ref, final VariantContext vc, final AlleleLikelihoods<GATKRead, Allele> likelihoods,
-                         final AlleleLikelihoods<Fragment, Haplotype> logFragmentLikelihoods) {
+    public void addData(final ReferenceContext ref, final VariantContext vc, Optional<List<VariantContext>> truthVCs,
+                        final AlleleLikelihoods<GATKRead, Allele> likelihoods,
+                        final AlleleLikelihoods<Fragment, Haplotype> logFragmentLikelihoods) {
         final String refBases = ReferenceBases.annotate(ref, vc);
         final String refAllele = vc.getReference().getBaseString();
         final String contig = vc.getContig();
@@ -127,11 +129,20 @@ public class Mutect3DatasetEngine implements AutoCloseable {
         for (int n = 0; n < numAlt; n++) {
             final double tumorAF = tumorADs[n+1] / ((double) tumorDepth);
             final double normalAF = hasNormal ? normalADs[n+1] / ((double) normalDepth) : 0.0;
-            final String altAllele = vc.getAlternateAllele(n).getBaseString();
-            final int diff = altAllele.length() - refAllele.length();
+            Allele altAllele = vc.getAlternateAllele(n);
+            final String altAlleleString = altAllele.getBaseString();
+            final int diff = altAlleleString.length() - refAllele.length();
             final VariantType type = diff == 0 ? VariantType.SNV : ( diff > 0 ? VariantType.INSERTION : VariantType.DELETION);
 
-            if (trainingMode) {
+            if (truthVCs.isPresent()) {
+                // blindly follow truth VCF for the label.  If it's in the VCF and unfiltered, it's true; otherwise it's an artifact.
+                // TODO: what about alternative representations?
+                final Set<Allele> truthAlleles = truthVCs.get().stream()
+                        .filter(var -> ! var.isFiltered())
+                        .flatMap(var -> var.getAlternateAlleles().stream())
+                        .collect(Collectors.toSet());
+                labels.add(truthAlleles.contains(altAllele) ? Label.VARIANT : Label.ARTIFACT);
+            } else if (trainingMode) {
                 final ArrayBlockingQueue<Integer> unmatchedQueue = unmatchedArtifactAltCounts.get(type);
                 final boolean likelySeqError = tumorLods[n] < TLOD_THRESHOLD;
                 final boolean likelyGermline = hasNormal && normalAF > 0.2;
@@ -152,7 +163,7 @@ public class Mutect3DatasetEngine implements AutoCloseable {
                 } else if (definiteGermline && !unmatchedQueue.isEmpty()) {
                     // high AF in tumor and normal, common in population implies germline, which we downsample
                     labels.add(Label.VARIANT);
-                    altDownsampleMap.put(vc.getAlternateAllele(n), unmatchedQueue.poll());
+                    altDownsampleMap.put(altAllele, unmatchedQueue.poll());
                 } else if (tumorLods[n] > 4.0 && tumorAF < 0.3) {
                     labels.add(Label.UNLABELED);
                 } else {
