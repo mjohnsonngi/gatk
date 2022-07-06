@@ -14,8 +14,10 @@ import org.broadinstitute.hellbender.tools.walkers.annotator.ReferenceBases;
 import org.broadinstitute.hellbender.tools.walkers.mutect.filtering.Mutect2FilteringEngine;
 import org.broadinstitute.hellbender.utils.IndexRange;
 import org.broadinstitute.hellbender.utils.MathUtils;
+import org.broadinstitute.hellbender.utils.NaturalLogUtils;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.genotyper.AlleleLikelihoods;
+import org.broadinstitute.hellbender.utils.genotyper.LikelihoodMatrix;
 import org.broadinstitute.hellbender.utils.haplotype.Haplotype;
 import org.broadinstitute.hellbender.utils.read.Fragment;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
@@ -104,7 +106,8 @@ public class Mutect3DatasetEngine implements AutoCloseable {
     // add one datum per alt allele
     public void addData(final ReferenceContext ref, final VariantContext vc, Optional<List<VariantContext>> truthVCs,
                         final AlleleLikelihoods<GATKRead, Allele> likelihoods,
-                        final AlleleLikelihoods<Fragment, Haplotype> logFragmentLikelihoods) {
+                        final AlleleLikelihoods<Fragment, Haplotype> logFragmentLikelihoods,
+                        final AlleleLikelihoods<Fragment, Allele> logFragmentAlleleLikelihoods) {
         final String refBases = ReferenceBases.annotate(ref, vc);
         final String refAllele = vc.getReference().getBaseString();
         final String contig = vc.getContig();
@@ -117,6 +120,12 @@ public class Mutect3DatasetEngine implements AutoCloseable {
         final double[] popafs = VariantContextGetters.getAttributeAsDoubleArray(vc, GATKVCFConstants.POPULATION_AF_KEY);
         //final double[] altPopulationAFs = MathUtils.applyToArray(popafs, x -> Math.pow(10, -x ));
         final double[] tumorLods = Mutect2FilteringEngine.getTumorLogOdds(vc);
+
+        // These ADs, which later make up the pre-downsampling depths, come from the genotype AD field applied by Mutect2.
+        // This means that uninformative reads are not discarded; rather the expected non-integral ADs are rounded to
+        // the nearest integer.  Also, these ADs are *fragment* ADs from the log fragment-allele likelihoods in the
+        // SomaticGenotypingEngine.For consistency, the seq error likelihood must also be calculated from every fragment in
+        // the fragment-allele log likelihoods matrix.
         final int[] tumorADs = sumADsOverSamples(vc, tumorSamples);
         final int[] normalADs = sumADsOverSamples(vc, normalSamples);
         final int tumorDepth = (int) MathUtils.sum(tumorADs);
@@ -191,10 +200,26 @@ public class Mutect3DatasetEngine implements AutoCloseable {
         final List<List<Integer>> tumorRefReads = tumorReadVectorsByAllele.get(0);
         final List<List<Integer>> normalRefReads = normalReadVectorsByAllele.get(0);
 
+        final List<LikelihoodMatrix<Fragment,Allele>> tumorMatrices = tumorSamples.stream()
+                .map(s -> logFragmentAlleleLikelihoods.sampleMatrix(logFragmentAlleleLikelihoods.indexOfSample(s)))
+                .collect(Collectors.toList());
+
         for (int n = 0; n < numAlt; n++) {
             if (labels.get(n) ==  Label.IGNORE) {
                 continue;
             }
+
+            // this should be n + 1, but just in case. . .
+            final int indexOfAllele = likelihoods.indexOfAllele(vc.getAlternateAllele(n));
+
+            // convert to RealMatrix (where alleles are rows and fragments are columns)
+            // flatten into stream of all fragment/columns over all samples
+            // sum contribution of each fragment
+            final double seqErrorLogLikelihood = tumorMatrices.stream()
+                    .map(LikelihoodMatrix::asRealMatrix)
+                    .flatMap(mat -> IntStream.range(0, mat.getColumnDimension()).mapToObj(mat::getColumn))
+                    .mapToDouble(col -> NaturalLogUtils.log1mexp(col[indexOfAllele] - NaturalLogUtils.logSumExp(col)))
+                    .sum();
 
             final String altAllele = vc.getAlternateAllele(n).getBaseString();
             final List<Double> variantFeatureVector = variantFeatures(n, assemblyComplexity, refBases);
@@ -214,7 +239,8 @@ public class Mutect3DatasetEngine implements AutoCloseable {
             //normalRefReads.forEach(r -> printWriter.print(numberString(r)));
             //normalAltReads.forEach(r -> printWriter.print(numberString(r)));
             printWriter.printf("%d %d %d %d%n", tumorDepth, tumorADs[n+1], normalDepth, normalADs[n+1]);  // pre-downsampling counts for normal artifact model
-            }
+            printWriter.printf("%.3f%n", seqErrorLogLikelihood);  // pre-downsampling counts for normal artifact model
+        }
     }
 
     private String integerString(final List<Integer> numbers) {
