@@ -333,9 +333,20 @@ public final class SVCallRecordUtils {
             contigB = contigA;
             positionB = variant.getEnd();
         }
+
+        final List<Allele> alleles;
+        if (type == StructuralVariantType.CNV) {
+            alleles = new ArrayList<>(3);
+            alleles.add(variant.getReference());
+            alleles.add(Allele.SV_SIMPLE_DEL);
+            alleles.add(Allele.SV_SIMPLE_DUP);
+        } else {
+            alleles = variant.getAlleles();
+        }
+
         final Map<String, Object> sanitizedAttributes = sanitizeAttributes(attributes);
         return new SVCallRecord(id, contigA, positionA, strand1, contigB, positionB, strand2, type, length, algorithms,
-                variant.getAlleles(), variant.getGenotypes(), sanitizedAttributes);
+                alleles, variant.getGenotypes(), sanitizedAttributes);
     }
 
     private static Map<String, Object> sanitizeAttributes(final Map<String, Object> attributes) {

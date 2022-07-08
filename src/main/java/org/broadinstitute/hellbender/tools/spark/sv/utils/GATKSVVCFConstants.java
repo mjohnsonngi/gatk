@@ -104,14 +104,18 @@ public final class GATKSVVCFConstants {
 
     // Clustering
     public static final String CLUSTER_MEMBER_IDS_KEY = "MEMBERS";
-    public static final String CROSS_REFERENCE_GENOTYPE_SUPPORT_FORMAT = "XRG";
-    public static final String CROSS_REFERENCE_SITE_SUPPORT_INFO = "XRS";
-    public static final String CROSS_REFERENCE_CARRIER_COUNT_INFO = "XRCC";
-    public static final String CROSS_REFERENCE_CARRIER_FREQ_INFO = "XRCF";
-    public static final String CROSS_REFERENCE_MEMBERS_INFO = "XRMEMBERS";
-
-    public static final String CARRIER_COUNT_INFO = "CC";
-    public static final String CARRIER_FREQ_INFO = "CF";
+    public static final String GENOTYPE_CONCORDANCE_INFO = "GENOTYPE_CONCORDANCE";
+    public static final String NON_REF_GENOTYPE_CONCORDANCE_INFO = "NON_REF_GENOTYPE_CONCORDANCE";
+    public static final String HET_PPV_INFO = "HET_PPV";
+    public static final String HET_SENSITIVITY_INFO = "HET_SENSITIVITY";
+    public static final String HET_SPECIFICITY_INFO = "HET_SPECIFICITY";
+    public static final String HOMVAR_PPV_INFO = "HOMVAR_PPV";
+    public static final String HOMVAR_SENSITIVITY_INFO = "HOMVAR_SENSITIVITY";
+    public static final String HOMVAR_SPECIFICITY_INFO = "HOMVAR_SPECIFICITY";
+    public static final String VAR_PPV_INFO = "VAR_PPV";
+    public static final String VAR_SENSITIVITY_INFO = "VAR_SENSITIVITY";
+    public static final String VAR_SPECIFICITY_INFO = "VAR_SPECIFICITY";
+    public static final String CONCORDANT_MEMBERS_INFO = "CONCORD_MEMBERS";
 
     // functional annotations
     public static final String LOF = "PREDICTED_LOF";

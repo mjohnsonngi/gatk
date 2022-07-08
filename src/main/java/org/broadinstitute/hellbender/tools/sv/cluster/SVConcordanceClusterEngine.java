@@ -10,10 +10,10 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class CrossRefSVClusterEngine {
+public class SVConcordanceClusterEngine {
 
     protected final Map<Long, SVCallRecord> refIdToItemMap;
-    protected final Map<Long, CrossRefCluster> idToClusterMap;
+    protected final Map<Long, ConcordanceCluster> idToClusterMap;
     private final SVClusterLinkage<SVCallRecord> linkage;
     private final Comparator<SVLocatable> locatableComparator;
     private final Function<CrossRefOutputCluster, SVCallRecord> collapser;
@@ -23,9 +23,9 @@ public class CrossRefSVClusterEngine {
     private Integer lastItemStart;
     private String lastItemContig;
 
-    public CrossRefSVClusterEngine(final SVClusterLinkage<SVCallRecord> linkage,
-                                   final Function<CrossRefOutputCluster, SVCallRecord> collapser,
-                                   final SAMSequenceDictionary dictionary) {
+    public SVConcordanceClusterEngine(final SVClusterLinkage<SVCallRecord> linkage,
+                                      final Function<CrossRefOutputCluster, SVCallRecord> collapser,
+                                      final SAMSequenceDictionary dictionary) {
         this.linkage = Utils.nonNull(linkage);
         this.collapser = Utils.nonNull(collapser);
         this.locatableComparator = SVCallRecordUtils.getSVLocatableComparator(dictionary);
@@ -38,7 +38,7 @@ public class CrossRefSVClusterEngine {
 
     public List<SVCallRecord> flush(final boolean force) {
         final List<SVCallRecord> collapsedRecords = flushClusters(force).stream()
-                .map(c -> new CrossRefOutputCluster(c.getTestItem(), c.getMembers().values()))
+                .map(c -> new CrossRefOutputCluster(c.getEvalItem(), c.getMembers().values()))
                 .map(collapser)
                 .collect(Collectors.toList());
         outputBuffer.addAll(collapsedRecords);
@@ -65,12 +65,12 @@ public class CrossRefSVClusterEngine {
     }
 
     private Integer minActiveStartPosition() {
-        return idToClusterMap.isEmpty() ? null : idToClusterMap.values().stream().mapToInt(c -> c.getTestItem().getPositionA()).min().getAsInt();
+        return idToClusterMap.isEmpty() ? null : idToClusterMap.values().stream().mapToInt(c -> c.getEvalItem().getPositionA()).min().getAsInt();
     }
 
-    private List<CrossRefCluster> flushClusters(final boolean force) {
+    private List<ConcordanceCluster> flushClusters(final boolean force) {
         if (force) {
-            final List<CrossRefCluster> output = new ArrayList<>(idToClusterMap.values());
+            final List<ConcordanceCluster> output = new ArrayList<>(idToClusterMap.values());
             refIdToItemMap.clear();
             idToClusterMap.clear();
             lastItemStart = null;
@@ -84,7 +84,7 @@ public class CrossRefSVClusterEngine {
                     .collect(Collectors.toList());
             finalizedRefItems.forEach(refIdToItemMap::remove);
             // Find finalized clusters
-            final List<Map.Entry<Long, CrossRefCluster>> finalizedClusters = idToClusterMap.entrySet().stream()
+            final List<Map.Entry<Long, ConcordanceCluster>> finalizedClusters = idToClusterMap.entrySet().stream()
                     .filter(e -> e.getValue().getMaxClusterableStartingPosition() < lastItemStart)
                     .collect(Collectors.toList());
             finalizedClusters.forEach(e -> idToClusterMap.remove(e.getKey()));
@@ -93,14 +93,18 @@ public class CrossRefSVClusterEngine {
     }
 
     public void add(final Long itemId, final SVCallRecord item, final boolean isRefVariant) {
+        if (item.getId().equals("ref_panel_1kg.chr1.final_cleanup_DUP_chr1_693")) {
+            int x = 0;
+        }
         Utils.validateArg(!refIdToItemMap.containsKey(itemId) && !idToClusterMap.containsKey(itemId), "Item id " + itemId + " already in use");
         Utils.validateArg(lastItemContig == null || lastItemContig.equals(item.getContigA()), "Attempted to add item on a new contig; please run a force flush beforehand");
         Utils.validateArg(lastItemStart == null || lastItemStart <= item.getPositionA(), "Items must be added in dictionary-sorted order");
         lastItemContig = item.getContigA();
         lastItemStart = item.getPositionA();
         if (isRefVariant) {
+            refIdToItemMap.put(itemId, item);
             idToClusterMap.values().stream()
-                .filter(other -> linkage.areClusterable(other.getTestItem(), item))
+                .filter(other -> linkage.areClusterable(other.getEvalItem(), item))
                 .forEach(cluster -> cluster.addMember(itemId, item));
         } else {
                 final List<Map.Entry<Long, SVCallRecord>> linkedItems = refIdToItemMap.entrySet().stream()
@@ -114,21 +118,21 @@ public class CrossRefSVClusterEngine {
                     final int currentMaxPos = linkage.getMaxClusterableStartingPosition(linkedItems.stream().map(Map.Entry::getValue).collect(Collectors.toList()));
                     maxPos = Math.max(itemMaxClusterableStart, currentMaxPos);
                 }
-                final CrossRefCluster cluster = new CrossRefCluster(linkedItems.stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)), itemId, item, maxPos);
+                final ConcordanceCluster cluster = new ConcordanceCluster(linkedItems.stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)), itemId, item, maxPos);
                 idToClusterMap.put(itemId, cluster);
         }
     }
 
     public class CrossRefOutputCluster {
-        final SVCallRecord testItem;
+        final SVCallRecord evalItem;
         final Collection<SVCallRecord> items;
-        public CrossRefOutputCluster(final SVCallRecord testItem, final Collection<SVCallRecord> items) {
-            this.testItem = testItem;
+        public CrossRefOutputCluster(final SVCallRecord evalItem, final Collection<SVCallRecord> items) {
+            this.evalItem = evalItem;
             this.items = items;
         }
 
-        public SVCallRecord getTestItem() {
-            return testItem;
+        public SVCallRecord getEvalItem() {
+            return evalItem;
         }
 
         public Collection<SVCallRecord> getItems() {
@@ -136,17 +140,17 @@ public class CrossRefSVClusterEngine {
         }
     }
 
-    public class CrossRefCluster {
+    public class ConcordanceCluster {
 
-        final Long testItemId;
-        final SVCallRecord testItem;
+        final Long evalItemId;
+        final SVCallRecord evalItem;
         final Map<Long, SVCallRecord> members;
         final int maxClusterableStartingPosition;
 
-        public CrossRefCluster(final Map<Long, SVCallRecord> members, final Long testItemId, final SVCallRecord testItem, final int maxClusterableStartingPosition) {
+        public ConcordanceCluster(final Map<Long, SVCallRecord> members, final Long evalItemId, final SVCallRecord evalItem, final int maxClusterableStartingPosition) {
             this.members = Utils.nonNull(members);
-            this.testItemId = Utils.nonNull(testItemId);
-            this.testItem = Utils.nonNull(testItem);
+            this.evalItemId = Utils.nonNull(evalItemId);
+            this.evalItem = Utils.nonNull(evalItem);
             this.maxClusterableStartingPosition = maxClusterableStartingPosition;
         }
 
@@ -155,12 +159,12 @@ public class CrossRefSVClusterEngine {
             members.put(id, item);
         }
 
-        public Long getTestItemId() {
-            return testItemId;
+        public Long getEvalItemId() {
+            return evalItemId;
         }
 
-        public SVCallRecord getTestItem() {
-            return testItem;
+        public SVCallRecord getEvalItem() {
+            return evalItem;
         }
 
         public Map<Long, SVCallRecord> getMembers() {
@@ -172,7 +176,7 @@ public class CrossRefSVClusterEngine {
         }
 
         public String getContig() {
-            return testItem.getContigA();
+            return evalItem.getContigA();
         }
     }
 }

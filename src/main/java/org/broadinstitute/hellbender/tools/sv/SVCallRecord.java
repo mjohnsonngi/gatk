@@ -268,6 +268,8 @@ public class SVCallRecord implements SVLocatable {
                 return copyNumber < expectedCopyNumber;
             } else if (allele.equals(Allele.SV_SIMPLE_DUP)) {
                 return copyNumber > expectedCopyNumber;
+            } else if (allele.equals(Allele.SV_SIMPLE_CNV)) {
+                return copyNumber != expectedCopyNumber;
             }
         }
 
@@ -304,6 +306,10 @@ public class SVCallRecord implements SVLocatable {
 
     public boolean isSimpleCNV() {
         return type == StructuralVariantType.DEL || type == StructuralVariantType.DUP || type == StructuralVariantType.CNV;
+    }
+
+    public boolean nullStrands() {
+        return strandA == null && strandB == null;
     }
 
     public Map<String, Object> getAttributes() {

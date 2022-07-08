@@ -101,15 +101,26 @@ public class CanonicalSVLinkage<T extends SVCallRecord> extends SVClusterLinkage
     }
 
     protected boolean typesMatch(final SVCallRecord a, final SVCallRecord b) {
-        if (a.getType() == b.getType()) {
+        final StructuralVariantType aType = a.getType();
+        final StructuralVariantType bType = b.getType();
+        if (aType == bType) {
             return true;
-        } else if (clusterDelWithDup && (a.isSimpleCNV() && b.isSimpleCNV())) {
-            return true;
+        }
+        if (aType == StructuralVariantType.BND || bType == StructuralVariantType.BND) {
+            return strandsMatch(a, b) && a.isIntrachromosomal() == b.isIntrachromosomal();
+        }
+        if (a.isSimpleCNV() && b.isSimpleCNV()) {
+            if (clusterDelWithDup || (aType == StructuralVariantType.CNV || bType == StructuralVariantType.CNV)) {
+                return true;
+            }
         }
         return false;
     }
 
     protected boolean strandsMatch(final SVCallRecord a, final SVCallRecord b) {
+        if (a.nullStrands() || b.nullStrands()) {
+            return true;
+        }
         return a.getStrandA() == b.getStrandA() && a.getStrandB() == b.getStrandB();
     }
 
