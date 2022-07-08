@@ -3,10 +3,12 @@ package org.broadinstitute.hellbender.tools.walkers.vqsr.scalable.modeling;
 import org.broadinstitute.hdf5.HDF5File;
 import org.broadinstitute.hdf5.HDF5LibException;
 import org.broadinstitute.hellbender.exceptions.GATKException;
+import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.hipparchus.stat.fitting.EmpiricalDistribution;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
@@ -35,9 +37,20 @@ public interface VariantAnnotationsScorer {
     void score(final File inputAnnotationsFile,
                final File outputScoresFile);
 
-    // TODO document that this is 1 - ECDF
+    /**
+     * Given scores for a calibration set, returns a function for converting a subsequent score to a
+     * sensitivity to that calibration set. This function is simply given by 1 - ECDF,
+     * where ECDF is the empirical cumulative distribution function of the calibration scores;
+     * see <a href='https://en.wikipedia.org/wiki/Empirical_distribution_function'>here</a>.
+     * For example, a score that is very low relative to the calibration scores would yield a
+     * high calibration sensitivity; that is, using this score as the minimum allowable threshold for filtering
+     * would result in a high sensitivity to the calibration set.
+     *
+     * @param calibrationScores must all be finite
+     */
     static Function<Double, Double> createScoreToCalibrationSensitivityConverter(final double[] calibrationScores) {
-        // TODO validate
+        Utils.validateArg(Arrays.stream(calibrationScores).allMatch(Double::isFinite),
+                "Calibration scores must all be finite.");
         final EmpiricalDistribution empiricalDistribution = new EmpiricalDistribution();
         empiricalDistribution.load(calibrationScores);
         return score -> 1. - empiricalDistribution.cumulativeProbability(score);

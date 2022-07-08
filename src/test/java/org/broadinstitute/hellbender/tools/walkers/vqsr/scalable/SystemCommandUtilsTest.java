@@ -16,7 +16,6 @@ public final class SystemCommandUtilsTest extends GATKBaseTest {
             "org/broadinstitute/hellbender/tools/walkers/vqsr/scalable/extract");
     private static final File EXPECTED_TEST_FILES_DIR = new File(TEST_FILES_DIR, "expected");
 
-    // this method is duplicated in the other integration-test classes in this package
     static void runSystemCommand(final String command) {
         logger.debug(String.format("Testing command: %s", command));
         try {

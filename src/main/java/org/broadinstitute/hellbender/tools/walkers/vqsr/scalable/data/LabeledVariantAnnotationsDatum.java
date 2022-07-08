@@ -71,7 +71,7 @@ final class LabeledVariantAnnotationsDatum implements Locatable {
             if (useASAnnotations && annotationName.startsWith(GATKVCFConstants.ALLELE_SPECIFIC_PREFIX)) {
                 final List<Object> valueList = vc.getAttributeAsList(annotationName);
                 final Allele altAllele = altAlleles.get(0);
-                //FIXME: we need to look at the ref allele here too
+                // FIXME: we need to look at the ref allele here too (SL: this comment was retained from VQSR code, I'm not sure what it means...)
                 if (vc.hasAllele(altAllele)) {
                     final int altIndex = vc.getAlleleIndex(altAllele) - 1; //- 1 is to convert the index from all alleles (including reference) to just alternate alleles
                     try {
