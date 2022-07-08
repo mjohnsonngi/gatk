@@ -58,7 +58,7 @@ def train(annotations_file,
                       test_X_ni):
         assert np.array_equal(test_annotation_names_i, annotation_names_i), \
             f'Input annotation names ({test_annotation_names_i}) must be identical to those used to train the scorer ({annotation_names_i}).'
-        return clf.score_samples(imputer.transform(test_X_ni))
+        return clf.score_samples(imputer.transform(test_X_ni)) # TODO sklearn's implementation is single-threaded, but this could perhaps be parallelized
 
     scorer_lambda = lambda test_annotation_names_i, test_X_ni: score_samples(test_annotation_names_i, test_X_ni)
 
