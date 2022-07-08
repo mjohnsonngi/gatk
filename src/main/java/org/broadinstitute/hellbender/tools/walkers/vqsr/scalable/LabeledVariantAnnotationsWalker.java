@@ -253,7 +253,9 @@ public abstract class LabeledVariantAnnotationsWalker extends MultiplePassVarian
 
     void writeAnnotationsToHDF5AndClearData() {
         if (data.size() == 0) {
-            throw new GATKException("None of the specified input variants were present in the resource VCFs.");
+            throw new GATKException("Found no input variants for extraction. This may be because the specified " +
+                    "genomic region contains no input variants of the requested type(s) or, if extracting " +
+                    "training labels, because none of the input variants were contained in the resource VCFs.");
         }
         for (final VariantType variantType : variantTypesToExtract) {
             logger.info(String.format("Extracted annotations for %d variants of type %s.",

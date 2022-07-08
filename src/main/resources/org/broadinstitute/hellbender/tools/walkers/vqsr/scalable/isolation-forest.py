@@ -56,7 +56,7 @@ def train(annotations_file,
 
     def score_samples(test_annotation_names_i,
                       test_X_ni):
-        assert np.all(test_annotation_names_i == annotation_names_i), \
+        assert np.array_equal(test_annotation_names_i, annotation_names_i), \
             f'Input annotation names ({test_annotation_names_i}) must be identical to those used to train the scorer ({annotation_names_i}).'
         return clf.score_samples(imputer.transform(test_X_ni))
 
