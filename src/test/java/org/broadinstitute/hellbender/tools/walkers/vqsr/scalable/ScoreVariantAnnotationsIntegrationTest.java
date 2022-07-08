@@ -142,4 +142,7 @@ public final class ScoreVariantAnnotationsIntegrationTest extends CommandLinePro
         SystemCommandUtilsTest.runSystemCommand(String.format("h5diff %s/%s.scores.hdf5 %s.scores.hdf5",
                 EXPECTED_TEST_FILES_DIR, tag, outputPrefix));
     }
+
+    // TODO test behavior for no variants
+    // TODO test behavior for requesting annotations different from those used to train model
 }

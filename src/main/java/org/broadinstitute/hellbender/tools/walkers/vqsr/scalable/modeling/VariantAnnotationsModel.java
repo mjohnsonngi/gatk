@@ -20,6 +20,7 @@ public interface VariantAnnotationsModel {
      *                                        └── num_rows
      *
      *                                  Modeling backends are responsible for consuming annotations in this format.
+     *                                  This includes validation of annotation names.
      *                                  In current use, we assume that a single model will be trained, so either
      *                                    1) training annotations have already been subset to a single variant type (SNP or INDEL), or
      *                                    2) we assume the model does not care about the variant type.

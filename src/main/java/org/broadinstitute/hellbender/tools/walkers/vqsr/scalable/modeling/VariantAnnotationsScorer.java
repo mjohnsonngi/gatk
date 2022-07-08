@@ -32,6 +32,7 @@ public interface VariantAnnotationsScorer {
      *                                     └── num_rows
      *
      *                              Scoring backends are responsible for consuming annotations in this format.
+     *                              This includes validation of annotation names.
      * @param outputScoresFile      Output file in HDF5 format, containing scores at {@link VariantAnnotationsScorer#SCORES_PATH}.
      */
     void score(final File inputAnnotationsFile,
