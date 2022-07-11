@@ -1,9 +1,13 @@
 package org.broadinstitute.hellbender.tools.walkers.sv;
 
 import htsjdk.samtools.SAMSequenceDictionary;
-import htsjdk.variant.variantcontext.*;
+import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.variantcontext.VariantContextBuilder;
 import htsjdk.variant.variantcontext.writer.VariantContextWriter;
-import htsjdk.variant.vcf.*;
+import htsjdk.variant.vcf.VCFFormatHeaderLine;
+import htsjdk.variant.vcf.VCFHeader;
+import htsjdk.variant.vcf.VCFHeaderLineType;
+import htsjdk.variant.vcf.VCFInfoHeaderLine;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.ArgumentCollection;
 import org.broadinstitute.barclay.argparser.BetaFeature;
@@ -17,20 +21,16 @@ import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.tools.spark.sv.utils.GATKSVVCFConstants;
 import org.broadinstitute.hellbender.tools.sv.SVCallRecord;
 import org.broadinstitute.hellbender.tools.sv.SVCallRecordUtils;
-import org.broadinstitute.hellbender.tools.sv.cluster.CanonicalSVCollapser;
 import org.broadinstitute.hellbender.tools.sv.cluster.CanonicalSVLinkage;
 import org.broadinstitute.hellbender.tools.sv.cluster.SVClusterEngineArgumentsCollection;
-import org.broadinstitute.hellbender.tools.sv.cluster.SVConcordanceClusterEngine;
+import org.broadinstitute.hellbender.tools.sv.concordance.SVConcordanceClusterEngine;
+import org.broadinstitute.hellbender.tools.sv.concordance.SVConcordanceCollapser;
 import org.broadinstitute.hellbender.tools.walkers.validation.Concordance;
-import org.broadinstitute.hellbender.tools.walkers.validation.ConcordanceState;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
-import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.variant.VariantContextGetters;
-import picard.vcf.*;
+import picard.vcf.GenotypeConcordance;
 
-import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.Comparator;
+import java.util.Iterator;
 
 /**
  * <p>Clusters structural variants based on coordinates, event type, and supporting algorithms. Primary use cases include:</p>
@@ -87,6 +87,7 @@ import java.util.stream.Collectors;
 public final class SVConcordance extends MultiVariantWalker {
 
     public static final String EVAL_VCF_LONG_NAME = "eval-vcf";
+    public static final String STRICT_CNV_INTERPRETATION_LONG_NAME = "strict-cnv-interpretation";
 
     @Argument(
             doc = "Output VCF",
@@ -102,6 +103,19 @@ public final class SVConcordance extends MultiVariantWalker {
     )
     private GATKPath evalVcf;
 
+    /**
+     * If used, CNVs diploid genotypes with copy number equal to the ploidy {@link GATKSVVCFConstants#COPY_NUMBER_FORMAT} ==
+     * {@link GATKSVVCFConstants#EXPECTED_COPY_NUMBER_FORMAT} will be interpreted as a "mixed" call, resulting in
+     * empty concordance status for the genotype. By default, these are treated as homozygous reference if the ploidy
+     * is greater than 0.
+     */
+    @Argument(
+            doc = "Enable strict CNV genotype copy state interpretation. See documentation for details.",
+            fullName = STRICT_CNV_INTERPRETATION_LONG_NAME,
+            optional = true
+    )
+    private boolean strictCnvInterpretation = false;
+
     @ArgumentCollection
     private final SVClusterEngineArgumentsCollection clusterParameterArgs = new SVClusterEngineArgumentsCollection();
 
@@ -114,7 +128,6 @@ public final class SVConcordance extends MultiVariantWalker {
     private SVConcordanceClusterEngine engine;
     private Long nextItemId = 0L;
     private String currentContig = null;
-    private GenotypeConcordanceScheme scheme;
 
     @Override
     public void onTraversalStart() {
@@ -127,7 +140,9 @@ public final class SVConcordance extends MultiVariantWalker {
         linkage.setDepthOnlyParams(clusterParameterArgs.getDepthParameters());
         linkage.setMixedParams(clusterParameterArgs.getMixedParameters());
         linkage.setEvidenceParams(clusterParameterArgs.getPESRParameters());
-        engine = new SVConcordanceClusterEngine(linkage, this::collapse, dictionary);
+
+        final SVConcordanceCollapser collapser = new SVConcordanceCollapser(strictCnvInterpretation);
+        engine = new SVConcordanceClusterEngine(linkage, collapser::collapse, dictionary);
 
         variantComparator = IntervalUtils.getDictionaryOrderComparator(dictionary);
         final FeatureDataSource<VariantContext> source = new FeatureDataSource<>(evalVcf.toString());
@@ -137,7 +152,6 @@ public final class SVConcordance extends MultiVariantWalker {
         }
         final VCFHeader header = (VCFHeader) headerObject;
         evalVariantSource = new FeatureDataSource<VariantContext>(evalVcf.toString()).iterator();
-        scheme = new GA4GHSchemeWithMissingAsHomRef();
 
         writer = createVCFWriter(outputFile);
         writer.writeHeader(createHeader(header));
@@ -217,203 +231,5 @@ public final class SVConcordance extends MultiVariantWalker {
         return header;
     }
 
-    public SVCallRecord collapse(final SVConcordanceClusterEngine.CrossRefOutputCluster cluster) {
-        final SVCallRecord evalRecord = cluster.getEvalItem();
-        final Map<String, List<Genotype>> truthGenotypesMap = cluster.getItems().stream()
-                .map(SVCallRecord::getGenotypes)
-                .flatMap(Collection::stream)
-                .collect(Collectors.groupingBy(Genotype::getSampleName));
-        final GenotypesContext evalGenotypes = evalRecord.getGenotypes();
-
-        final ArrayList<Genotype> newGenotypes = new ArrayList<>(evalGenotypes.size());
-        final GenotypeConcordanceCounts counts = new GenotypeConcordanceCounts();
-        for (final Genotype g : evalGenotypes) {
-            final GenotypeBuilder builder = new GenotypeBuilder(g);
-            final String sample = g.getSampleName();
-            final GenotypeConcordanceStates.TruthState truthState = getTruthState(truthGenotypesMap.get(sample), evalRecord);
-            final GenotypeConcordanceStates.CallState evalState = getEvalState(g, evalRecord);
-            final GenotypeConcordanceStates.TruthAndCallStates state = new GenotypeConcordanceStates.TruthAndCallStates(truthState, evalState);
-            counts.increment(state);
-            builder.attribute(GenotypeConcordance.CONTINGENCY_STATE_TAG, scheme.getContingencyStateString(truthState, evalState));
-            newGenotypes.add(builder.make());
-        }
-        final SVCallRecord recordWithGenotypes = SVCallRecordUtils.copyCallWithNewGenotypes(evalRecord, GenotypesContext.create(newGenotypes));
-        final Map<String, Object> attributes = new HashMap<>(recordWithGenotypes.getAttributes());
-        final List<String> members = cluster.getItems().stream().map(SVCallRecord::getId).collect(Collectors.toList());
-        final ConcordanceState variantStatus = cluster.getItems().isEmpty() ? ConcordanceState.FALSE_POSITIVE : ConcordanceState.TRUE_POSITIVE;
-        final GenotypeConcordanceSummaryMetrics metrics = new GenotypeConcordanceSummaryMetrics(VariantContext.Type.SYMBOLIC, counts, "truth", "eval", true);
-
-        attributes.put(Concordance.TRUTH_STATUS_VCF_ATTRIBUTE, variantStatus.getAbbreviation());
-        attributes.put(GATKSVVCFConstants.GENOTYPE_CONCORDANCE_INFO, metrics.GENOTYPE_CONCORDANCE);
-        attributes.put(GATKSVVCFConstants.NON_REF_GENOTYPE_CONCORDANCE_INFO, metrics.NON_REF_GENOTYPE_CONCORDANCE);
-        attributes.put(GATKSVVCFConstants.HET_PPV_INFO, metrics.HET_PPV);
-        attributes.put(GATKSVVCFConstants.HET_SENSITIVITY_INFO, metrics.HET_SENSITIVITY);
-        attributes.put(GATKSVVCFConstants.HET_SPECIFICITY_INFO, metrics.HET_SPECIFICITY);
-        attributes.put(GATKSVVCFConstants.HOMVAR_PPV_INFO, metrics.HOMVAR_PPV);
-        attributes.put(GATKSVVCFConstants.HOMVAR_SENSITIVITY_INFO, metrics.HOMVAR_SENSITIVITY);
-        attributes.put(GATKSVVCFConstants.HOMVAR_SPECIFICITY_INFO, metrics.HOMVAR_SPECIFICITY);
-        attributes.put(GATKSVVCFConstants.VAR_PPV_INFO, metrics.VAR_PPV);
-        attributes.put(GATKSVVCFConstants.VAR_SENSITIVITY_INFO, metrics.VAR_SENSITIVITY);
-        attributes.put(GATKSVVCFConstants.VAR_SPECIFICITY_INFO, metrics.VAR_SPECIFICITY);
-        attributes.put(GATKSVVCFConstants.CONCORDANT_MEMBERS_INFO, members);
-
-        return SVCallRecordUtils.copyCallWithNewAttributes(recordWithGenotypes, attributes);
-    }
-
-    protected GenotypeConcordanceStates.CallState getEvalState(final Genotype genotype, final SVCallRecord record) {
-        final StructuralVariantType svtype = record.getType();
-        if (svtype == StructuralVariantType.CNV || svtype == StructuralVariantType.DUP || svtype == StructuralVariantType.DEL) {
-            return getCNVEvalState(genotype, record);
-        } else {
-            return getNonCNVEvalState(genotype);
-        }
-    }
-
-    private GenotypeConcordanceStates.CallState getNonCNVEvalState(final Genotype g) {
-        if (g.isHomRef()) {
-            return GenotypeConcordanceStates.CallState.HOM_REF;
-        } else if (g.isHet()) {
-            return GenotypeConcordanceStates.CallState.HET_REF_VAR1;
-        } else if (g.isHomVar()) {
-            return GenotypeConcordanceStates.CallState.HOM_VAR1;
-        } else if (g.isNoCall() || g.getPloidy() == 0) {
-            return GenotypeConcordanceStates.CallState.NO_CALL;
-        } else if (g.isFiltered()) {
-            return GenotypeConcordanceStates.CallState.GT_FILTERED;
-        } else {
-            throw new IllegalArgumentException("Unsupported eval set genotype: " + g.toBriefString());
-        }
-    }
-
-    protected GenotypeConcordanceStates.TruthState getTruthState(final List<Genotype> genotypes, final SVCallRecord record) {
-        if (genotypes == null || genotypes.isEmpty()) {
-            return GenotypeConcordanceStates.TruthState.HOM_REF;
-        }
-        final StructuralVariantType svtype = record.getType();
-        final boolean isCNV = svtype == StructuralVariantType.CNV || svtype == StructuralVariantType.DUP || svtype == StructuralVariantType.DEL;
-        final Function<Genotype, GenotypeConcordanceStates.TruthState> mapper = isCNV ? x -> getCNVTruthState(x, record) : this::getNonCNVTruthState;
-        final Set<GenotypeConcordanceStates.TruthState> states = genotypes.stream().map(mapper).collect(Collectors.toSet());
-        final int numHetRefVar1 = states.contains(GenotypeConcordanceStates.TruthState.HET_REF_VAR1) ? 1 : 0;
-        final int numHetVar1Var2 = states.contains(GenotypeConcordanceStates.TruthState.HET_VAR1_VAR2) ? 1 : 0;
-        final int numHomVar = states.contains(GenotypeConcordanceStates.TruthState.HOM_VAR1) ? 1 : 0;
-        if (numHetRefVar1 + numHetVar1Var2 + numHomVar > 1) {
-            return GenotypeConcordanceStates.TruthState.IS_MIXED;
-        } else if (numHetRefVar1 == 1) {
-            return GenotypeConcordanceStates.TruthState.HET_REF_VAR1;
-        } else if (numHetVar1Var2 == 1) {
-            return GenotypeConcordanceStates.TruthState.HET_VAR1_VAR2;
-        } else if (numHomVar == 1) {
-            return GenotypeConcordanceStates.TruthState.HOM_VAR1;
-        } else if (states.contains(GenotypeConcordanceStates.TruthState.HOM_REF)) {
-            return GenotypeConcordanceStates.TruthState.HOM_REF;
-        } else if (states.contains(GenotypeConcordanceStates.TruthState.NO_CALL)) {
-            return GenotypeConcordanceStates.TruthState.NO_CALL;
-        } else {
-            throw new IllegalArgumentException("Unsupported TruthStates in set: " +
-                    String.join(", ", states.stream().map(Object::toString).collect(Collectors.toList())));
-        }
-    }
-
-    private GenotypeConcordanceStates.TruthState getNonCNVTruthState(final Genotype g) {
-        if (g.isHomRef()) {
-            return GenotypeConcordanceStates.TruthState.HOM_REF;
-        } else if (g.isHet()) {
-            return GenotypeConcordanceStates.TruthState.HET_REF_VAR1;
-        } else if (g.isHomVar()) {
-            return GenotypeConcordanceStates.TruthState.HOM_VAR1;
-        } else if (g.isNoCall() || g.getPloidy() == 0) {
-            return GenotypeConcordanceStates.TruthState.NO_CALL;
-        } else if (g.isFiltered()) {
-            return GenotypeConcordanceStates.TruthState.GT_FILTERED;
-        } else {
-            throw new IllegalArgumentException("Unsupported truth set genotype: " + g.toBriefString());
-        }
-    }
-
-    private CNVAlleleCounts getCNVAlleleCounts(final Genotype g, final SVCallRecord record) {
-        final int ploidy = VariantContextGetters.getAttributeAsInt(g, GATKSVVCFConstants.EXPECTED_COPY_NUMBER_FORMAT, g.getPloidy());
-        Utils.validate(ploidy <= 2, "Ploidy can be at most 2 but found: " + ploidy);
-        Utils.validateArg(g.hasExtendedAttribute(GATKSVVCFConstants.COPY_NUMBER_FORMAT), "CNV genotype has undefined copy number: " + g.toBriefString());
-        final int copyNumber = VariantContextGetters.getAttributeAsInt(g, GATKSVVCFConstants.COPY_NUMBER_FORMAT, 0);
-        final List<Allele> determinableAlleles = CanonicalSVCollapser.getCNVGenotypeAllelesFromCopyNumber(record.getAltAlleles(), record.getRefAllele(), ploidy, copyNumber);
-        int numVarDel = 0;
-        int numVarDup = 0;
-        int numRef = 0;
-        for (int i = 0; i < determinableAlleles.size(); i++) {
-            final Allele a = determinableAlleles.get(i);
-            if (a.isNonReference()) {
-                if (a.equals(Allele.SV_SIMPLE_DEL)) {
-                    numVarDel++;
-                } else if (a.equals(Allele.SV_SIMPLE_DUP)) {
-                    numVarDup++;
-                } else if (!a.equals(Allele.NO_CALL)) {
-                    throw new IllegalArgumentException("Unsupported CNV alt allele: " + a);
-                }
-            } else if (a.isReference()) {
-                numRef++;
-            }
-        }
-        return new CNVAlleleCounts(ploidy, numVarDel, numVarDup, numRef);
-    }
-
-    private GenotypeConcordanceStates.CallState getCNVEvalState(final Genotype g, final SVCallRecord record) {
-        final CNVAlleleCounts counts = getCNVAlleleCounts(g, record);
-        if (counts.numDel > 0) {
-            if (counts.numDup > 0) {
-                return GenotypeConcordanceStates.CallState.HET_VAR1_VAR2;
-            } else if (counts.numRef > 0) {
-                return GenotypeConcordanceStates.CallState.HET_REF_VAR1;
-            } else {
-                return GenotypeConcordanceStates.CallState.HOM_VAR1;
-            }
-        } else if (counts.numDup > 0) {
-            if (counts.numRef > 0) {
-                return GenotypeConcordanceStates.CallState.HET_REF_VAR1;
-            } else {
-                return GenotypeConcordanceStates.CallState.HOM_VAR1;
-            }
-        } else if (counts.numRef > 0) {
-            return GenotypeConcordanceStates.CallState.HOM_REF;
-        } else {
-            return GenotypeConcordanceStates.CallState.NO_CALL;
-        }
-    }
-
-    private GenotypeConcordanceStates.TruthState getCNVTruthState(final Genotype g, final SVCallRecord record) {
-        final CNVAlleleCounts counts = getCNVAlleleCounts(g, record);
-        if (counts.numDel > 0) {
-            if (counts.numDup > 0) {
-                return GenotypeConcordanceStates.TruthState.HET_VAR1_VAR2;
-            } else if (counts.numRef > 0) {
-                return GenotypeConcordanceStates.TruthState.HET_REF_VAR1;
-            } else {
-                return GenotypeConcordanceStates.TruthState.HOM_VAR1;
-            }
-        } else if (counts.numDup > 0) {
-            if (counts.numRef > 0) {
-                return GenotypeConcordanceStates.TruthState.HET_REF_VAR1;
-            } else {
-                return GenotypeConcordanceStates.TruthState.HOM_VAR1;
-            }
-        } else if (counts.numRef > 0) {
-            return GenotypeConcordanceStates.TruthState.HOM_REF;
-        } else {
-            return GenotypeConcordanceStates.TruthState.NO_CALL;
-        }
-    }
-
-    private static class CNVAlleleCounts {
-        public final int ploidy;
-        public final int numDel;
-        public final int numDup;
-        public final int numRef;
-
-        public CNVAlleleCounts(final int ploidy, final int numDel, final int numDup, final int numRef) {
-            this.ploidy = ploidy;
-            this.numDel = numDel;
-            this.numDup = numDup;
-            this.numRef = numRef;
-        }
-    }
 
 }

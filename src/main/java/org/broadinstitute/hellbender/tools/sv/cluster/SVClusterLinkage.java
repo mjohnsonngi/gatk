@@ -15,7 +15,7 @@ public abstract class SVClusterLinkage<T extends SVLocatable> {
      * @param a first item
      * @param b second item
      */
-    abstract boolean areClusterable(final T a, final T b);
+    public abstract boolean areClusterable(final T a, final T b);
 
     /**
      * Returns the maximum feasible starting position of any other item with the given item. That is, given item A and
@@ -25,7 +25,7 @@ public abstract class SVClusterLinkage<T extends SVLocatable> {
      * @param item item in question
      * @return max feasible clusterable start coordinate on the current contig
      */
-    abstract int getMaxClusterableStartingPosition(final T item);
+    public abstract int getMaxClusterableStartingPosition(final T item);
 
     /**
      * Compute max feasible starting position of any other item for all items in the given collection. Note the items

@@ -1,9 +1,10 @@
-package org.broadinstitute.hellbender.tools.sv.cluster;
+package org.broadinstitute.hellbender.tools.sv.concordance;
 
 import htsjdk.samtools.SAMSequenceDictionary;
 import org.broadinstitute.hellbender.tools.sv.SVCallRecord;
 import org.broadinstitute.hellbender.tools.sv.SVCallRecordUtils;
 import org.broadinstitute.hellbender.tools.sv.SVLocatable;
+import org.broadinstitute.hellbender.tools.sv.cluster.SVClusterLinkage;
 import org.broadinstitute.hellbender.utils.Utils;
 
 import java.util.*;
@@ -16,7 +17,7 @@ public class SVConcordanceClusterEngine {
     protected final Map<Long, ConcordanceCluster> idToClusterMap;
     private final SVClusterLinkage<SVCallRecord> linkage;
     private final Comparator<SVLocatable> locatableComparator;
-    private final Function<CrossRefOutputCluster, SVCallRecord> collapser;
+    private final Function<ConcordanceOutputCluster, SVCallRecord> collapser;
 
     private final PriorityQueue<SVCallRecord> outputBuffer;
 
@@ -24,7 +25,7 @@ public class SVConcordanceClusterEngine {
     private String lastItemContig;
 
     public SVConcordanceClusterEngine(final SVClusterLinkage<SVCallRecord> linkage,
-                                      final Function<CrossRefOutputCluster, SVCallRecord> collapser,
+                                      final Function<ConcordanceOutputCluster, SVCallRecord> collapser,
                                       final SAMSequenceDictionary dictionary) {
         this.linkage = Utils.nonNull(linkage);
         this.collapser = Utils.nonNull(collapser);
@@ -38,7 +39,7 @@ public class SVConcordanceClusterEngine {
 
     public List<SVCallRecord> flush(final boolean force) {
         final List<SVCallRecord> collapsedRecords = flushClusters(force).stream()
-                .map(c -> new CrossRefOutputCluster(c.getEvalItem(), c.getMembers().values()))
+                .map(c -> new ConcordanceOutputCluster(c.getEvalItem(), c.getMembers().values()))
                 .map(collapser)
                 .collect(Collectors.toList());
         outputBuffer.addAll(collapsedRecords);
@@ -93,9 +94,6 @@ public class SVConcordanceClusterEngine {
     }
 
     public void add(final Long itemId, final SVCallRecord item, final boolean isRefVariant) {
-        if (item.getId().equals("ref_panel_1kg.chr1.final_cleanup_DUP_chr1_693")) {
-            int x = 0;
-        }
         Utils.validateArg(!refIdToItemMap.containsKey(itemId) && !idToClusterMap.containsKey(itemId), "Item id " + itemId + " already in use");
         Utils.validateArg(lastItemContig == null || lastItemContig.equals(item.getContigA()), "Attempted to add item on a new contig; please run a force flush beforehand");
         Utils.validateArg(lastItemStart == null || lastItemStart <= item.getPositionA(), "Items must be added in dictionary-sorted order");
@@ -123,10 +121,10 @@ public class SVConcordanceClusterEngine {
         }
     }
 
-    public class CrossRefOutputCluster {
+    public class ConcordanceOutputCluster {
         final SVCallRecord evalItem;
         final Collection<SVCallRecord> items;
-        public CrossRefOutputCluster(final SVCallRecord evalItem, final Collection<SVCallRecord> items) {
+        public ConcordanceOutputCluster(final SVCallRecord evalItem, final Collection<SVCallRecord> items) {
             this.evalItem = evalItem;
             this.items = items;
         }
