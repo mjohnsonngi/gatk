@@ -152,7 +152,9 @@ public final class ExtractVariantAnnotationsIntegrationTest extends CommandLineP
                                       final String outputPrefix) {
         // vcf.idx files are not reproducible
         SystemCommandUtilsTest.runSystemCommand(String.format("h5diff %s/%s %s",
-                EXPECTED_TEST_FILES_DIR, tag + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX, outputPrefix + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX));
+                EXPECTED_TEST_FILES_DIR,
+                tag + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX,
+                outputPrefix + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX));
         SystemCommandUtilsTest.runSystemCommand(String.format("diff %s/%s.vcf %s.vcf",
                 EXPECTED_TEST_FILES_DIR, tag, outputPrefix));
         if (tag.contains("posUn")) {
