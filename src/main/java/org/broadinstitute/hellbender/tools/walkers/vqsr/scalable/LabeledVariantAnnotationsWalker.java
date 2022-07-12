@@ -102,7 +102,7 @@ public abstract class LabeledVariantAnnotationsWalker extends MultiplePassVarian
     public static final String OMIT_ALLELES_IN_HDF5_LONG_NAME = "omit-alleles-in-hdf5";
     public static final String DO_NOT_GZIP_VCF_OUTPUT_LONG_NAME = "do-not-gzip-vcf-output";
 
-    static final String ANNOTATIONS_HDF5_SUFFIX = ".annot.hdf5";
+    public static final String ANNOTATIONS_HDF5_SUFFIX = ".annot.hdf5";
 
     @Argument(
             fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME,

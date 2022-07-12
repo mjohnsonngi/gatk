@@ -43,6 +43,8 @@ public final class ExtractVariantAnnotations extends LabeledVariantAnnotationsWa
     public static final String MAXIMUM_NUMBER_OF_UNLABELED_VARIANTS_LONG_NAME = "maximum-number-of-unlabeled-variants";
     public static final String RESERVOIR_SAMPLING_RANDOM_SEED_LONG_NAME = "reservoir-sampling-random-seed";
 
+    public static final String UNLABELED_TAG = ".unlabeled";
+
     @Argument(
             fullName = MAXIMUM_NUMBER_OF_UNLABELED_VARIANTS_LONG_NAME,
             doc = "Maximum number of unlabeled variants to extract. " +
@@ -145,7 +147,7 @@ public final class ExtractVariantAnnotations extends LabeledVariantAnnotationsWa
 
     // TODO clean up
     private void writeUnlabeledAnnotationsToHDF5AndClearData() {
-        final File outputUnlabeledAnnotationsFile = new File(outputPrefix + ".unlabeled" + ANNOTATIONS_HDF5_SUFFIX);
+        final File outputUnlabeledAnnotationsFile = new File(outputPrefix + UNLABELED_TAG + ANNOTATIONS_HDF5_SUFFIX);
         if (unlabeledDataReservoir.size() == 0) {
             throw new GATKException("No unlabeled variants were present in the input VCF.");
         }

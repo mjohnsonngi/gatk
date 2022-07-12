@@ -4,7 +4,6 @@ import com.google.common.collect.Streams;
 import com.google.common.primitives.Doubles;
 import org.apache.commons.math3.stat.descriptive.moment.Variance;
 import org.apache.commons.math3.stat.descriptive.rank.Percentile;
-import org.apache.logging.log4j.Logger;
 import org.broadinstitute.barclay.argparser.Argument;
 import org.broadinstitute.barclay.argparser.CommandLineProgramProperties;
 import org.broadinstitute.barclay.help.DocumentedFeature;
@@ -60,9 +59,10 @@ public final class TrainVariantAnnotationsModel extends CommandLineProgram {
         POSITIVE_ONLY, POSITIVE_UNLABELED
     }
 
-    private static final String TRAINING_SCORES_HDF5_SUFFIX = ".trainingScores.hdf5";
-    private static final String CALIBRATION_SCORES_HDF5_SUFFIX = ".calibrationScores.hdf5";
-    private static final String UNLABELED_SCORES_HDF5_SUFFIX = ".unlabeledScores.hdf5";
+    public static final String TRAINING_SCORES_HDF5_SUFFIX = ".trainingScores.hdf5";
+    public static final String CALIBRATION_SCORES_HDF5_SUFFIX = ".calibrationScores.hdf5";
+    public static final String UNLABELED_SCORES_HDF5_SUFFIX = ".unlabeledScores.hdf5";
+    public static final String NEGATIVE_TAG = ".negative";
 
     @Argument(
             fullName = ANNOTATIONS_HDF5_LONG_NAME,
@@ -172,6 +172,9 @@ public final class TrainVariantAnnotationsModel extends CommandLineProgram {
         }
     }
 
+    /**
+     * TODO
+     */
     private void doModelingWorkForVariantType(final VariantType variantType) {
         // positive model
         final List<String> annotationNames = LabeledVariantAnnotationsData.readAnnotationNames(inputAnnotationsFile);
@@ -245,18 +248,8 @@ public final class TrainVariantAnnotationsModel extends CommandLineProgram {
                     logger.info(String.format("Selected %d unlabeled %s sites below score threshold of %.4f for negative-model training...",
                             numNegativeTrainingFromUnlabeledVariantType, logMessageTag, scoreThreshold));
 
-                    // combine labeled and unlabeled negative training data
-                    final File negativeTrainingFromLabeledTrainingAndVariantTypeAnnotationsFile =
-                            LabeledVariantAnnotationsData.subsetAnnotationsToTemporaryFile(annotationNames, annotations, isNegativeTrainingFromLabeledTrainingAndVariantType);
-                    final double[][] negativeTrainingFromLabeledTrainingAndVariantTypeAnnotations = LabeledVariantAnnotationsData.readAnnotations(negativeTrainingFromLabeledTrainingAndVariantTypeAnnotationsFile);
-
-                    final File negativeTrainingFromUnlabeledVariantTypeAnnotationsFile =
-                            LabeledVariantAnnotationsData.subsetAnnotationsToTemporaryFile(annotationNames, unlabeledAnnotations, isNegativeTrainingFromUnlabeledVariantType);
-                    final double[][] negativeTrainingFromUnlabeledVariantTypeAnnotations = LabeledVariantAnnotationsData.readAnnotations(negativeTrainingFromUnlabeledVariantTypeAnnotationsFile);
-
-                    final double[][] negativeTrainingAndVariantTypeAnnotations = Streams.concat(
-                            Arrays.stream(negativeTrainingFromLabeledTrainingAndVariantTypeAnnotations),
-                            Arrays.stream(negativeTrainingFromUnlabeledVariantTypeAnnotations)).toArray(double[][]::new);
+                    final double[][] negativeTrainingAndVariantTypeAnnotations = concatenateLabeledAndUnlabeledNegativeTrainingData(
+                            annotationNames, annotations, unlabeledAnnotations, isNegativeTrainingFromLabeledTrainingAndVariantType, isNegativeTrainingFromUnlabeledVariantType);
                     final int numNegativeTrainingAndVariantType = negativeTrainingAndVariantTypeAnnotations.length;
                     final List<Boolean> isNegativeTrainingAndVariantType = Collections.nCopies(numNegativeTrainingAndVariantType, true);
 
@@ -264,8 +257,8 @@ public final class TrainVariantAnnotationsModel extends CommandLineProgram {
                             logMessageTag, numNegativeTrainingAndVariantType, annotationNames.size(), annotationNames));
                     final File negativeTrainingAnnotationsFile = LabeledVariantAnnotationsData.subsetAnnotationsToTemporaryFile(
                             annotationNames, negativeTrainingAndVariantTypeAnnotations, isNegativeTrainingAndVariantType);
-                    trainAndSerializeModel(negativeTrainingAnnotationsFile, outputPrefixTag + ".negative");
-                    logger.info(String.format("%s negative model trained and serialized with output prefix \"%s\".", logMessageTag, outputPrefix + outputPrefixTag + ".negative"));
+                    trainAndSerializeModel(negativeTrainingAnnotationsFile, outputPrefixTag + NEGATIVE_TAG);
+                    logger.info(String.format("%s negative model trained and serialized with output prefix \"%s\".", logMessageTag, outputPrefix + outputPrefixTag + NEGATIVE_TAG));
 
                     if (numLabeledCalibrationAndVariantType > 0) {
                         logger.info(String.format("Re-scoring %d %s calibration sites...", numLabeledCalibrationAndVariantType, logMessageTag));
@@ -305,8 +298,10 @@ public final class TrainVariantAnnotationsModel extends CommandLineProgram {
         model.trainAndSerialize(trainingAnnotationsFile, outputPrefix + outputPrefixTag);
     }
 
-    // when training models on data that has been subset to a given variant type,
-    // we FAIL if any annotation is completely missing and WARN if any annotation has zero variance
+    /**
+     * When training models on data that has been subset to a given variant type,
+     * we FAIL if any annotation is completely missing and WARN if any annotation has zero variance.
+     */
     private void readAndValidateTrainingAnnotations(final File trainingAnnotationsFile,
                                                     final String outputPrefixTag) {
         final List<String> annotationNames = LabeledVariantAnnotationsData.readAnnotationNames(trainingAnnotationsFile);
@@ -354,7 +349,7 @@ public final class TrainVariantAnnotationsModel extends CommandLineProgram {
         final VariantAnnotationsScorer scorer;
         switch (modelBackendMode) {
             case PYTHON:
-                scorer = new PythonSklearnVariantAnnotationsScorer(pythonScriptFile, new File(outputPrefix + outputPrefixTag + ".scorer.pkl"));
+                scorer = new PythonSklearnVariantAnnotationsScorer(pythonScriptFile, new File(outputPrefix + outputPrefixTag + PythonSklearnVariantAnnotationsScorer.PYTHON_SCORER_PKL_SUFFIX));
                 break;
             case BGMM:
                 scorer = BGMMVariantAnnotationsScorer.deserialize(new File(outputPrefix + outputPrefixTag + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX));
@@ -374,13 +369,13 @@ public final class TrainVariantAnnotationsModel extends CommandLineProgram {
         switch (modelBackendMode) {
             case PYTHON:
                 scorer = VariantAnnotationsScorer.combinePositiveAndNegativeScorer(
-                        new PythonSklearnVariantAnnotationsScorer(pythonScriptFile, new File(outputPrefix + outputPrefixTag + ".scorer.pkl")),
-                        new PythonSklearnVariantAnnotationsScorer(pythonScriptFile, new File(outputPrefix + outputPrefixTag + ".negative.scorer.pkl")));
+                        new PythonSklearnVariantAnnotationsScorer(pythonScriptFile, new File(outputPrefix + outputPrefixTag + PythonSklearnVariantAnnotationsScorer.PYTHON_SCORER_PKL_SUFFIX)),
+                        new PythonSklearnVariantAnnotationsScorer(pythonScriptFile, new File(outputPrefix + outputPrefixTag + NEGATIVE_TAG + PythonSklearnVariantAnnotationsScorer.PYTHON_SCORER_PKL_SUFFIX)));
                 break;
             case BGMM:
                 scorer = VariantAnnotationsScorer.combinePositiveAndNegativeScorer(
                         BGMMVariantAnnotationsScorer.deserialize(new File(outputPrefix + outputPrefixTag + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX)),
-                        BGMMVariantAnnotationsScorer.deserialize(new File(outputPrefix + outputPrefixTag + ".negative" + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX)));
+                        BGMMVariantAnnotationsScorer.deserialize(new File(outputPrefix + outputPrefixTag + NEGATIVE_TAG + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX)));
                 break;
             default:
                 throw new GATKException.ShouldNeverReachHereException("Unknown model mode.");
@@ -388,5 +383,23 @@ public final class TrainVariantAnnotationsModel extends CommandLineProgram {
         final File outputScoresFile = new File(outputPrefix + outputPrefixTag + outputSuffix);
         scorer.score(annotationsFile, outputScoresFile);
         return outputScoresFile;
+    }
+
+    private static double[][] concatenateLabeledAndUnlabeledNegativeTrainingData(final List<String> annotationNames,
+                                                                                 final double[][] annotations,
+                                                                                 final double[][] unlabeledAnnotations,
+                                                                                 final List<Boolean> isNegativeTrainingFromLabeledTrainingAndVariantType,
+                                                                                 final List<Boolean> isNegativeTrainingFromUnlabeledVariantType) {
+        final File negativeTrainingFromLabeledTrainingAndVariantTypeAnnotationsFile =
+                LabeledVariantAnnotationsData.subsetAnnotationsToTemporaryFile(annotationNames, annotations, isNegativeTrainingFromLabeledTrainingAndVariantType);
+        final double[][] negativeTrainingFromLabeledTrainingAndVariantTypeAnnotations = LabeledVariantAnnotationsData.readAnnotations(negativeTrainingFromLabeledTrainingAndVariantTypeAnnotationsFile);
+
+        final File negativeTrainingFromUnlabeledVariantTypeAnnotationsFile =
+                LabeledVariantAnnotationsData.subsetAnnotationsToTemporaryFile(annotationNames, unlabeledAnnotations, isNegativeTrainingFromUnlabeledVariantType);
+        final double[][] negativeTrainingFromUnlabeledVariantTypeAnnotations = LabeledVariantAnnotationsData.readAnnotations(negativeTrainingFromUnlabeledVariantTypeAnnotationsFile);
+
+        return Streams.concat(
+                Arrays.stream(negativeTrainingFromLabeledTrainingAndVariantTypeAnnotations),
+                Arrays.stream(negativeTrainingFromUnlabeledVariantTypeAnnotations)).toArray(double[][]::new);
     }
 }

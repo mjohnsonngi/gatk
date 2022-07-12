@@ -12,7 +12,10 @@ import java.util.Arrays;
 import java.util.List;
 
 public final class PythonSklearnVariantAnnotationsScorer implements VariantAnnotationsScorer, Serializable {
+
     private static final long serialVersionUID = 1L;
+
+    public static final String PYTHON_SCORER_PKL_SUFFIX = ".scorer.pkl";
 
     private final File pythonScriptFile;
     private final File scorerPklFile;

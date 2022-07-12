@@ -74,7 +74,7 @@ public final class ExtractVariantAnnotationsIntegrationTest extends CommandLineP
     private static final Supplier<ArgumentsBuilder> BASE_ARGUMENTS_BUILDER_SUPPLIER = () -> {
         final ArgumentsBuilder argsBuilder = new ArgumentsBuilder();
         argsBuilder.addVCF(INPUT_VCF);
-        argsBuilder.addFlag(LabeledVariantAnnotationsWalker.DO_NOT_GZIP_VCF_OUTPUT_LONG_NAME);
+        argsBuilder.addFlag(LabeledVariantAnnotationsWalker.DO_NOT_GZIP_VCF_OUTPUT_LONG_NAME); // we do not gzip VCF outputs so that we can use diff to compare to the expected result
         argsBuilder.add(StandardArgumentDefinitions.ADD_OUTPUT_VCF_COMMANDLINE, false);
         return argsBuilder;
     };
@@ -151,15 +151,17 @@ public final class ExtractVariantAnnotationsIntegrationTest extends CommandLineP
     private static void assertOutputs(final String tag,
                                       final String outputPrefix) {
         // vcf.idx files are not reproducible
-        SystemCommandUtilsTest.runSystemCommand(String.format("h5diff %s/%s.annot.hdf5 %s.annot.hdf5",
-                EXPECTED_TEST_FILES_DIR, tag, outputPrefix));
+        SystemCommandUtilsTest.runSystemCommand(String.format("h5diff %s/%s %s",
+                EXPECTED_TEST_FILES_DIR, tag + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX, outputPrefix + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX));
         SystemCommandUtilsTest.runSystemCommand(String.format("diff %s/%s.vcf %s.vcf",
                 EXPECTED_TEST_FILES_DIR, tag, outputPrefix));
         if (tag.contains("posUn")) {
-            SystemCommandUtilsTest.runSystemCommand(String.format("h5diff %s/%s.unlabeled.annot.hdf5 %s.unlabeled.annot.hdf5",
-                    EXPECTED_TEST_FILES_DIR, tag, outputPrefix));
+            SystemCommandUtilsTest.runSystemCommand(String.format("h5diff %s/%s %s",
+                    EXPECTED_TEST_FILES_DIR,
+                    tag + ExtractVariantAnnotations.UNLABELED_TAG + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX,
+                    outputPrefix + ExtractVariantAnnotations.UNLABELED_TAG + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX));
         } else {
-            Assert.assertFalse(new File(outputPrefix + ".unlabeled.annot.hdf5").exists());
+            Assert.assertFalse(new File(outputPrefix + ExtractVariantAnnotations.UNLABELED_TAG + LabeledVariantAnnotationsWalker.ANNOTATIONS_HDF5_SUFFIX).exists());
         }
     }
 

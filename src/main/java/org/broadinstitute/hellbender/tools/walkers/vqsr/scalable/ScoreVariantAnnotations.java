@@ -146,8 +146,8 @@ public class ScoreVariantAnnotations extends LabeledVariantAnnotationsWalker {
             PythonScriptExecutor.checkPythonEnvironmentForPackage("dill");
 
             // TODO extract method and constants
-            final File snpScorerPklFile = new File(modelPrefix + ".snp.scorer.pkl");
-            final File snpNegativeScorerPklFile = new File(modelPrefix + ".snp.negative.scorer.pkl");
+            final File snpScorerPklFile = new File(modelPrefix + ".snp" + PythonSklearnVariantAnnotationsScorer.PYTHON_SCORER_PKL_SUFFIX);
+            final File snpNegativeScorerPklFile = new File(modelPrefix + ".snp" + TrainVariantAnnotationsModel.NEGATIVE_TAG + PythonSklearnVariantAnnotationsScorer.PYTHON_SCORER_PKL_SUFFIX);
             snpScorer = snpScorerPklFile.canRead()
                     ? snpNegativeScorerPklFile.canRead()
                         ? VariantAnnotationsScorer.combinePositiveAndNegativeScorer(
@@ -155,8 +155,8 @@ public class ScoreVariantAnnotations extends LabeledVariantAnnotationsWalker {
                             new PythonSklearnVariantAnnotationsScorer(pythonScriptFile, snpNegativeScorerPklFile))
                         : new PythonSklearnVariantAnnotationsScorer(pythonScriptFile, snpScorerPklFile)
                     : null;
-            final File indelScorerPklFile = new File(modelPrefix + ".indel.scorer.pkl");
-            final File indelNegativeScorerPklFile = new File(modelPrefix + ".indel.negative.scorer.pkl");
+            final File indelScorerPklFile = new File(modelPrefix + ".indel" + PythonSklearnVariantAnnotationsScorer.PYTHON_SCORER_PKL_SUFFIX);
+            final File indelNegativeScorerPklFile = new File(modelPrefix + ".indel" + TrainVariantAnnotationsModel.NEGATIVE_TAG + PythonSklearnVariantAnnotationsScorer.PYTHON_SCORER_PKL_SUFFIX);
             indelScorer = indelScorerPklFile.canRead()
                     ? indelNegativeScorerPklFile.canRead()
                         ? VariantAnnotationsScorer.combinePositiveAndNegativeScorer(
@@ -170,7 +170,7 @@ public class ScoreVariantAnnotations extends LabeledVariantAnnotationsWalker {
 
             // TODO extract method and constants
             final File snpScorerSerFile = new File(modelPrefix + ".snp" + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX);
-            final File snpNegativeScorerSerFile = new File(modelPrefix + ".snp.negative" + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX);
+            final File snpNegativeScorerSerFile = new File(modelPrefix + ".snp" + TrainVariantAnnotationsModel.NEGATIVE_TAG + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX);
             snpScorer = snpScorerSerFile.canRead()
                     ? snpNegativeScorerSerFile.canRead()
                         ? VariantAnnotationsScorer.combinePositiveAndNegativeScorer(
@@ -179,7 +179,7 @@ public class ScoreVariantAnnotations extends LabeledVariantAnnotationsWalker {
                         : BGMMVariantAnnotationsScorer.deserialize(snpScorerSerFile)
                     : null;
             final File indelScorerSerFile = new File(modelPrefix + ".indel" + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX);
-            final File indelNegativeScorerSerFile = new File(modelPrefix + ".indel.negative" + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX);
+            final File indelNegativeScorerSerFile = new File(modelPrefix + ".indel" + TrainVariantAnnotationsModel.NEGATIVE_TAG + BGMMVariantAnnotationsScorer.BGMM_SCORER_SER_SUFFIX);
             indelScorer = indelScorerSerFile.canRead()
                     ? indelNegativeScorerSerFile.canRead()
                         ? VariantAnnotationsScorer.combinePositiveAndNegativeScorer(
@@ -205,11 +205,11 @@ public class ScoreVariantAnnotations extends LabeledVariantAnnotationsWalker {
         }
 
         // TODO extract method and constants
-        final File snpCalibrationScores = new File(modelPrefix + ".snp.calibrationScores.hdf5");
+        final File snpCalibrationScores = new File(modelPrefix + ".snp" + TrainVariantAnnotationsModel.CALIBRATION_SCORES_HDF5_SUFFIX);
         snpCalibrationSensitivityConverter = snpCalibrationScores.canRead()
                 ? VariantAnnotationsScorer.createScoreToCalibrationSensitivityConverter(VariantAnnotationsScorer.readScores(snpCalibrationScores))
                 : null;
-        final File indelCalibrationScores = new File(modelPrefix + ".indel.calibrationScores.hdf5");
+        final File indelCalibrationScores = new File(modelPrefix + ".indel" + TrainVariantAnnotationsModel.CALIBRATION_SCORES_HDF5_SUFFIX);
         indelCalibrationSensitivityConverter = indelCalibrationScores.canRead()
                 ? VariantAnnotationsScorer.createScoreToCalibrationSensitivityConverter(VariantAnnotationsScorer.readScores(indelCalibrationScores))
                 : null;
