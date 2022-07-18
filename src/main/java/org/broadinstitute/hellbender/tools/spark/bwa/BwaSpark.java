@@ -13,6 +13,7 @@ import picard.cmdline.programgroups.ReadDataManipulationProgramGroup;
 import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.filters.ReadFilterLibrary;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
+import org.broadinstitute.hellbender.engine.GATKPath;
 import org.broadinstitute.hellbender.engine.spark.datasources.ReadsSparkSink;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
@@ -75,7 +76,7 @@ public final class BwaSpark extends GATKSparkTool {
             try {
                 // NOTE, we must include 'shardedOutput' as the input to `sortReadsToMatchHeader` to preserve the old default behavior for writing BwaSpark output
                 // where we would not sort the bam if outputting to a sharded output.
-                ReadsSparkSink.writeReads(ctx, output, null, reads, bwaEngine.getHeader(),
+                ReadsSparkSink.writeReads(ctx, new GATKPath(output), null, reads, bwaEngine.getHeader(),
                                             shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE, getRecommendedNumReducers(), shardedPartsDir, shardedOutput, splittingIndexGranularity);
             } catch (final IOException e) {
                 throw new GATKException("Unable to write aligned reads", e);
