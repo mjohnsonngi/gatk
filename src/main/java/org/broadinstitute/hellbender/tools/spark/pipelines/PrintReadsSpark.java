@@ -10,6 +10,7 @@ import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import picard.cmdline.programgroups.ReadDataManipulationProgramGroup;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
+import org.broadinstitute.hellbender.engine.GATKPath;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 
@@ -31,6 +32,6 @@ public final class PrintReadsSpark extends GATKSparkTool {
     protected void runTool(final JavaSparkContext ctx) {
 
         final JavaRDD<GATKRead> reads = getReads();
-        writeReads(ctx, output, reads, getHeaderForReads(), false);
+        writeReads(ctx, new GATKPath(output), reads, getHeaderForReads(), false);
     }
 }
