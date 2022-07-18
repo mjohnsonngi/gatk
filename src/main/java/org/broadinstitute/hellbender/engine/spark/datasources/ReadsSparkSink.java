@@ -50,9 +50,9 @@ public final class ReadsSparkSink {
      * @param format should the output be a single file, sharded, ADAM, etc.
      */
     public static void writeReads(
-            final JavaSparkContext ctx, final String outputFile, final GATKPath referencePathSpecifier, final JavaRDD<GATKRead> reads,
+            final JavaSparkContext ctx, final GATKPath outputPathSpecifier, final GATKPath referencePathSpecifier, final JavaRDD<GATKRead> reads,
             final SAMFileHeader header, ReadsWriteFormat format) throws IOException {
-        writeReads(ctx, outputFile, referencePathSpecifier, reads, header, format, 0, null, true, SBIIndexWriter.DEFAULT_GRANULARITY);
+        writeReads(ctx, outputPathSpecifier, referencePathSpecifier, reads, header, format, 0, null, true, SBIIndexWriter.DEFAULT_GRANULARITY);
     }
 
     /**
@@ -70,9 +70,9 @@ public final class ReadsSparkSink {
      * @param splittingIndexGranularity the granularity of the splitting index
      */
     public static void writeReads(
-            final JavaSparkContext ctx, final String outputFile, final GATKPath referencePathSpecifier, final JavaRDD<GATKRead> reads,
+            final JavaSparkContext ctx, final GATKPath outputPathSpecifier, final GATKPath referencePathSpecifier, final JavaRDD<GATKRead> reads,
             final SAMFileHeader header, ReadsWriteFormat format, final int numReducers, final String outputPartsDir, final boolean sortReadsToHeader, final long splittingIndexGranularity) throws IOException {
-        writeReads(ctx, outputFile, referencePathSpecifier, reads, header, format, numReducers, outputPartsDir, true, true, sortReadsToHeader, splittingIndexGranularity);
+        writeReads(ctx, outputPathSpecifier, referencePathSpecifier, reads, header, format, numReducers, outputPartsDir, true, true, sortReadsToHeader, splittingIndexGranularity);
     }
 
     /**
@@ -92,12 +92,11 @@ public final class ReadsSparkSink {
      * @param splittingIndexGranularity  the granularity of the splitting index if one is created
      */
     public static void writeReads(
-            final JavaSparkContext ctx, final String outputFile, final GATKPath referencePathSpecifier, final JavaRDD<GATKRead> reads,
+            final JavaSparkContext ctx, final GATKPath outputPathSpecifier, final GATKPath referencePathSpecifier, final JavaRDD<GATKRead> reads,
             final SAMFileHeader header, ReadsWriteFormat format, final int numReducers, final String outputPartsDir,
             final boolean writeBai, final boolean writeSbi, final boolean sortReadsToHeader, final long splittingIndexGranularity) throws IOException {
 
-        String absoluteOutputFile = BucketUtils.makeFilePathAbsolute(outputFile);
-        ReadsSparkSource.checkCramReference(ctx, new GATKPath(absoluteOutputFile), referencePathSpecifier);
+        ReadsSparkSource.checkCramReference(ctx, outputPathSpecifier, referencePathSpecifier);
 
         // The underlying reads are required to be in SAMRecord format in order to be
         // written out, so we convert them to SAMRecord explicitly here. If they're already
@@ -112,16 +111,16 @@ public final class ReadsSparkSink {
             TempPartsDirectoryWriteOption tempPartsDirectoryWriteOption = new TempPartsDirectoryWriteOption(outputPartsDirectory);
             BaiWriteOption baiWriteOption = BaiWriteOption.fromBoolean(writeBai);
             SbiWriteOption sbiWriteOption = SbiWriteOption.fromBoolean(writeSbi);
-            if (absoluteOutputFile.endsWith(FileExtensions.BAM) ||
-                    absoluteOutputFile.endsWith(FileExtensions.CRAM) ||
-                    absoluteOutputFile.endsWith(FileExtensions.SAM)) {
+            if (outputPathSpecifier.toString().endsWith(FileExtensions.BAM) ||
+                    outputPathSpecifier.toString().endsWith(FileExtensions.CRAM) ||
+                    outputPathSpecifier.toString().endsWith(FileExtensions.SAM)) {
                 // don't specify a write option for format since it is inferred from the extension in the path
-                writeReads(ctx, absoluteOutputFile, referencePathSpecifier, readsToOutput, header,
+                writeReads(ctx, outputPathSpecifier, referencePathSpecifier, readsToOutput, header,
                         splittingIndexGranularity, fileCardinalityWriteOption, tempPartsDirectoryWriteOption, baiWriteOption, sbiWriteOption);
             } else {
                 // default to BAM
                 ReadsFormatWriteOption formatWriteOption = ReadsFormatWriteOption.BAM;
-                writeReads(ctx, absoluteOutputFile, referencePathSpecifier, readsToOutput, header, splittingIndexGranularity, formatWriteOption,
+                writeReads(ctx, outputPathSpecifier, referencePathSpecifier, readsToOutput, header, splittingIndexGranularity, formatWriteOption,
                         fileCardinalityWriteOption, tempPartsDirectoryWriteOption, baiWriteOption, sbiWriteOption);
             }
         } else if (format == ReadsWriteFormat.SHARDED) {
@@ -130,17 +129,17 @@ public final class ReadsSparkSink {
             }
             ReadsFormatWriteOption formatWriteOption = ReadsFormatWriteOption.BAM; // use BAM if output file is a directory
             FileCardinalityWriteOption fileCardinalityWriteOption = FileCardinalityWriteOption.MULTIPLE;
-            writeReads(ctx, absoluteOutputFile, referencePathSpecifier, readsToOutput, header, splittingIndexGranularity, formatWriteOption, fileCardinalityWriteOption);
+            writeReads(ctx, outputPathSpecifier, referencePathSpecifier, readsToOutput, header, splittingIndexGranularity, formatWriteOption, fileCardinalityWriteOption);
         } else if (format == ReadsWriteFormat.ADAM) {
             if (outputPartsDir!=null) {
                 throw new  GATKException(String.format("You specified the bam output parts directory %s, but requested an ADAM output format which does not use this option",outputPartsDir));
             }
-            writeReadsADAM(ctx, absoluteOutputFile, readsToOutput, header);
+            writeReadsADAM(ctx, outputPathSpecifier, readsToOutput, header);
         }
     }
 
     private static void writeReads(
-            final JavaSparkContext ctx, final String outputFile, final GATKPath referencePathSpecifier, final JavaRDD<SAMRecord> reads,
+            final JavaSparkContext ctx, final GATKPath outputPathSpecifier, final GATKPath referencePathSpecifier, final JavaRDD<SAMRecord> reads,
             final SAMFileHeader header, final long sbiIndexGranularity, final WriteOption... writeOptions) throws IOException {
 
         Broadcast<SAMFileHeader> headerBroadcast = ctx.broadcast(header);
@@ -152,11 +151,11 @@ public final class ReadsSparkSink {
         HtsjdkReadsRddStorage.makeDefault(ctx)
                 .referenceSourcePath(referencePathSpecifier == null ? null : referencePathSpecifier.getRawInputString())
                 .sbiIndexGranularity(sbiIndexGranularity)
-                .write(htsjdkReadsRdd, outputFile, writeOptions);
+                .write(htsjdkReadsRdd, outputPathSpecifier.toString(), writeOptions);
     }
 
     private static void writeReadsADAM(
-            final JavaSparkContext ctx, final String outputFile, final JavaRDD<SAMRecord> reads,
+            final JavaSparkContext ctx, final GATKPath outputPathSpecifier, final JavaRDD<SAMRecord> reads,
             final SAMFileHeader header) throws IOException {
         final SequenceDictionary seqDict = SequenceDictionary.fromSAMSequenceDictionary(header.getSequenceDictionary());
         final ReadGroupDictionary readGroups = ReadGroupDictionary.fromSAMHeader(header);
@@ -173,9 +172,9 @@ public final class ReadsSparkSink {
         // we are writing the Avro schema to the Configuration as a JSON string. The AvroParquetOutputFormat class knows
         // how to translate objects in the Avro data model to the Parquet primitives that get written.
         AvroParquetOutputFormat.setSchema(job, AlignmentRecord.getClassSchema());
-        deleteHadoopFile(outputFile, ctx.hadoopConfiguration());
+        deleteHadoopFile(outputPathSpecifier.toString(), ctx.hadoopConfiguration());
         rddAlignmentRecords.saveAsNewAPIHadoopFile(
-                outputFile, Void.class, AlignmentRecord.class, AvroParquetOutputFormat.class, job.getConfiguration());
+                outputPathSpecifier.toString(), Void.class, AlignmentRecord.class, AvroParquetOutputFormat.class, job.getConfiguration());
     }
 
     private static void deleteHadoopFile(String fileToObliterate, Configuration conf) throws IOException {
