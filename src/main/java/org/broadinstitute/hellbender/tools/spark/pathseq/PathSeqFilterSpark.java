@@ -10,6 +10,7 @@ import org.broadinstitute.barclay.help.DocumentedFeature;
 import org.broadinstitute.hellbender.cmdline.GATKPlugin.GATKReadFilterPluginDescriptor;
 import org.broadinstitute.hellbender.cmdline.programgroups.MetagenomicsProgramGroup;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
+import org.broadinstitute.hellbender.engine.GATKPath;
 import org.broadinstitute.hellbender.tools.spark.pathseq.loggers.PSFilterEmptyLogger;
 import org.broadinstitute.hellbender.tools.spark.pathseq.loggers.PSFilterFileLogger;
 import org.broadinstitute.hellbender.tools.spark.pathseq.loggers.PSFilterLogger;
@@ -169,7 +170,7 @@ public final class PathSeqFilterSpark extends GATKSparkTool {
         }
         if (!unpairedReads.isEmpty()) {
             header.setSortOrder(SAMFileHeader.SortOrder.unsorted);
-            writeReads(ctx, outputUnpaired, unpairedReads, header, true);
+            writeReads(ctx, new GATKPath(outputUnpaired), unpairedReads, header, true);
         } else {
             logger.info("No unpaired reads to write - BAM will not be written.");
         }
