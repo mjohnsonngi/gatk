@@ -38,7 +38,7 @@ RUN cp -r $( find /gatk/build -name "*bundle-files-collected" )/ /gatk/unzippedJ
 RUN unzip -o -j $( find /gatk/unzippedJar -name "gatkPython*.zip" ) -d /gatk/unzippedJar/scripts
 
 # Using OpenJDK 8
-//FROM broadinstitute/gatk:gatkbase-2.3.0
+#FROM broadinstitute/gatk:gatkbase-2.3.0
 
 WORKDIR /gatk
 
