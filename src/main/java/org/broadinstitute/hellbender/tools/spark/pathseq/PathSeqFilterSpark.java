@@ -164,7 +164,7 @@ public final class PathSeqFilterSpark extends GATKSparkTool {
 
         if (!pairedReads.isEmpty()) {
             header.setSortOrder(SAMFileHeader.SortOrder.queryname);
-            writeReads(ctx, outputPaired, pairedReads, header, true);
+            writeReads(ctx, new GATKPath(outputPaired), pairedReads, header, true);
         } else {
             logger.info("No paired reads to write - BAM will not be written.");
         }
