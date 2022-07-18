@@ -68,7 +68,7 @@ public final class BwaAndMarkDuplicatesPipelineSpark extends GATKSparkTool {
             final JavaRDD<GATKRead> alignedReads = bwaEngine.alignPaired(getUnfilteredReads()).filter(filter::test);
             final JavaRDD<GATKRead> markedReads = MarkDuplicatesSpark.mark(alignedReads, bwaEngine.getHeader(), new OpticalDuplicateFinder(), markDuplicatesSparkArgumentCollection, getRecommendedNumReducers());
             try {
-                ReadsSparkSink.writeReads(ctx, output,
+                ReadsSparkSink.writeReads(ctx, new GATKPath(output),
                         referenceArguments.getReferenceSpecifier(),
                         markedReads, bwaEngine.getHeader(),
                         shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE,
