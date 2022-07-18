@@ -131,7 +131,7 @@ public class BaseRecalibratorSpark extends GATKSparkTool {
 
         final RecalibrationReport bqsrReport = BaseRecalibratorSparkFn.apply(readsWithVariants, getHeaderForReads(), referenceFileName, bqsrArgs);
 
-        try ( final PrintStream reportStream = new PrintStream(BucketUtils.createFile(outputTablesPath)) ) {
+        try ( final PrintStream reportStream = new PrintStream(BucketUtils.createFile(new GATKPath(outputTablesPath).toURI().toString())) ) {
             RecalUtils.outputRecalibrationReport(reportStream, bqsrArgs, bqsrReport.getQuantizationInfo(), bqsrReport.getRecalibrationTables(), bqsrReport.getCovariates());
         }
     }
