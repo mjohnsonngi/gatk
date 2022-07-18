@@ -171,7 +171,7 @@ public final class PathSeqBwaSpark extends GATKSparkTool {
 
         final String outputPath = isPaired ? outputPaired : outputUnpaired;
         try {
-            ReadsSparkSink.writeReads(ctx, outputPath, null, reads, header,
+            ReadsSparkSink.writeReads(ctx, new GATKPath(outputPath), null, reads, header,
                     shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE,
                     PSUtils.pathseqGetRecommendedNumReducers(inputBamPath, numReducers, getTargetPartitionSize()), shardedPartsDir, true, splittingIndexGranularity);
         } catch (final IOException e) {
