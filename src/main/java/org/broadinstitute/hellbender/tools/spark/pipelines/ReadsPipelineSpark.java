@@ -20,6 +20,7 @@ import org.broadinstitute.hellbender.engine.filters.ReadFilter;
 import org.broadinstitute.hellbender.engine.spark.AssemblyRegionArgumentCollection;
 import org.broadinstitute.hellbender.engine.spark.AssemblyRegionReadShardArgumentCollection;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
+import org.broadinstitute.hellbender.engine.GATKPath;
 import org.broadinstitute.hellbender.utils.spark.JoinReadsWithVariants;
 import org.broadinstitute.hellbender.tools.ApplyBQSRUniqueArgumentCollection;
 import org.broadinstitute.hellbender.tools.HaplotypeCallerSpark;
@@ -208,7 +209,7 @@ public class ReadsPipelineSpark extends GATKSparkTool {
         final JavaRDD<GATKRead> finalReads = ApplyBQSRSparkFn.apply(sortedMarkedReads, reportBroadcast, getHeaderForReads(), applyBqsrArgs.toApplyBQSRArgumentCollection(bqsrArgs));
 
         if (outputBam != null) { // only write output of BQSR if output BAM is specified
-            writeReads(ctx, outputBam, finalReads, header, true);
+            writeReads(ctx, new GATKPath(outputBam), finalReads, header, true);
         }
 
         // Run Haplotype Caller
