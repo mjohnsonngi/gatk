@@ -13,6 +13,7 @@ import org.broadinstitute.hellbender.cmdline.GATKPlugin.GATKReadFilterPluginDesc
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.MetagenomicsProgramGroup;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
+import org.broadinstitute.hellbender.engine.GATKPath;
 import org.broadinstitute.hellbender.engine.spark.datasources.ReadsSparkSink;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
@@ -287,7 +288,7 @@ public class PathSeqPipelineSpark extends GATKSparkTool {
                 // is far too small for sharded output.
                 final int numPartitions = Math.max(1, (int) (numTotalReads / readsPerPartitionOutput));
                 final JavaRDD<GATKRead> readsFinalRepartitioned = readsFinal.coalesce(numPartitions, false);
-                ReadsSparkSink.writeReads(ctx, outputPath, null, readsFinalRepartitioned, header,
+                ReadsSparkSink.writeReads(ctx, new GATKPath(outputPath), null, readsFinalRepartitioned, header,
                         shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE, numPartitions, shardedPartsDir, true, splittingIndexGranularity);
             } catch (final IOException e) {
                 throw new UserException.CouldNotCreateOutputFile(outputPath, "writing failed", e);
