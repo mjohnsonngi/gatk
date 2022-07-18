@@ -107,7 +107,7 @@ public final class ReadsSparkSink {
 
         if (format == ReadsWriteFormat.SINGLE) {
             FileCardinalityWriteOption fileCardinalityWriteOption = FileCardinalityWriteOption.SINGLE;
-            final String outputPartsDirectory = (outputPartsDir == null)? getDefaultPartsDirectory(outputPathSpecifier.toURI().toString())  : outputPartsDir;
+            final String outputPartsDirectory = (outputPartsDir == null)? getDefaultPartsDirectory(outputPathSpecifier.getURIString())  : outputPartsDir;
             TempPartsDirectoryWriteOption tempPartsDirectoryWriteOption = new TempPartsDirectoryWriteOption(outputPartsDirectory);
             BaiWriteOption baiWriteOption = BaiWriteOption.fromBoolean(writeBai);
             SbiWriteOption sbiWriteOption = SbiWriteOption.fromBoolean(writeSbi);
