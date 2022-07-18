@@ -217,7 +217,7 @@ public class PathSeqScoreSpark extends GATKSparkTool {
         //Note writeReads() is not used because we determine recommendedNumReducers differently with 2 input BAMs
         if (outputPath != null) {
             try {
-                ReadsSparkSink.writeReads(ctx, outputPath, null, readsFinal, header,
+                ReadsSparkSink.writeReads(ctx, new GATKPath(outputPath), null, readsFinal, header,
                         shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE, recommendedNumReducers, shardedPartsDir, true, splittingIndexGranularity);
             } catch (final IOException e) {
                 throw new UserException.CouldNotCreateOutputFile(outputPath, "writing failed", e);
